@@ -1,4 +1,3 @@
-// server.js - Kopieer dit naar backend/server.js
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
@@ -9,13 +8,18 @@ require('dotenv').config();
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
-// CORS
-app.use(cors({
-  origin: 'http://localhost:5173',
-  credentials: true
-}));
-
+// CORS - allow all origins in production
+app.use(cors());
 app.use(express.json());
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'ok',
+    hasAPIKey: !!process.env.OPENAI_API_KEY,
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Transcription endpoint
 app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
@@ -161,34 +165,8 @@ Gebruik dit format:
   }
 });
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'ok',
-    hasAPIKey: !!process.env.OPENAI_API_KEY,
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Test connection
-app.get('/api/test', async (req, res) => {
-  try {
-    const response = await fetch('https://api.openai.com/v1/models', {
-      headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` }
-    });
-    
-    if (response.ok) {
-      res.json({ status: 'connected', message: 'OpenAI API working' });
-    } else {
-      res.status(response.status).json({ error: 'OpenAI API error' });
-    }
-  } catch (error) {
-    res.status(500).json({ error: 'Connection failed' });
-  }
-});
-
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`🚀 Backend running on http://localhost:${PORT}`);
+  console.log(`🚀 Backend running on port ${PORT}`);
   console.log(`🔐 API Key: ${process.env.OPENAI_API_KEY ? '✅ Set' : '❌ Missing'}`);
 });
