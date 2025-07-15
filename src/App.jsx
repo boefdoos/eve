@@ -16,39 +16,66 @@ const EVE = () => {
   const timerRef = useRef(null);
 
   useEffect(() => {
+    console.log('🔧 Setting up Speech Recognition...');
+    
     // Check browser support
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      console.error('❌ Speech Recognition not supported');
       setError('Spraakherkenning niet ondersteund. Gebruik Chrome of Edge browser.');
       return;
     }
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    console.log('✅ Speech Recognition available:', !!SpeechRecognition);
+    
     const recognition = new SpeechRecognition();
     
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'nl-NL';
+    
+    console.log('⚙️ Recognition configured with:', {
+      continuous: recognition.continuous,
+      interimResults: recognition.interimResults,
+      lang: recognition.lang
+    });
+
+    recognition.onstart = () => {
+      console.log('🎙️ Speech recognition started');
+    };
 
     recognition.onresult = (event) => {
+      console.log('🎤 Speech result received:', event.results.length, 'results');
       let finalTranscript = '';
       
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
           finalTranscript += result[0].transcript + ' ';
+          console.log('✅ Final transcript chunk:', result[0].transcript);
+        } else {
+          console.log('⏳ Interim result:', result[0].transcript);
         }
       }
 
       if (finalTranscript) {
-        setTranscript(prev => prev + finalTranscript);
+        console.log('📝 Adding to transcript:', finalTranscript);
+        setTranscript(prev => {
+          const newTranscript = prev + finalTranscript;
+          console.log('📄 Total transcript length:', newTranscript.length);
+          return newTranscript;
+        });
       }
     };
 
     recognition.onerror = (event) => {
-      console.error('Speech recognition error:', event.error);
+      console.error('❌ Speech recognition error:', event.error, event);
       if (event.error === 'not-allowed') {
         setError('Microfoon toegang geweigerd. Sta toegang toe in je browser.');
         setPermissionStatus('denied');
+      } else if (event.error === 'no-speech') {
+        console.log('⚠️ No speech detected, continuing...');
+        // Don't show error for no-speech, just continue
       } else {
         setError('Spraakherkenning fout: ' + event.error);
       }
@@ -56,18 +83,22 @@ const EVE = () => {
     };
 
     recognition.onend = () => {
+      console.log('🔚 Speech recognition ended');
       if (isListening) {
+        console.log('🔄 Restarting recognition...');
         try {
           recognition.start();
         } catch (e) {
-          console.log('Recognition restart failed:', e);
+          console.error('❌ Failed to restart recognition:', e);
         }
       }
     };
 
     recognitionRef.current = recognition;
+    console.log('✅ Speech Recognition setup complete');
 
     return () => {
+      console.log('🧹 Cleaning up Speech Recognition');
       if (recognition) {
         recognition.stop();
       }
@@ -78,14 +109,24 @@ const EVE = () => {
   }, [isListening]);
 
   const checkMicrophonePermission = async () => {
+    console.log('🎤 Checking microphone permission...');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(track => track.stop());
+      console.log('✅ Microphone access granted');
+      console.log('🎙️ Audio tracks:', stream.getAudioTracks().length);
+      stream.getTracks().forEach(track => {
+        console.log('🔧 Stopping track:', track.label);
+        track.stop();
+      });
       setPermissionStatus('granted');
       return true;
     } catch (error) {
+      console.error('❌ Microphone permission error:', error);
       if (error.name === 'NotAllowedError') {
+        console.log('🚫 Permission explicitly denied by user');
         setPermissionStatus('denied');
+      } else {
+        console.log('⚠️ Other permission error:', error.name, error.message);
       }
       return false;
     }
@@ -116,28 +157,37 @@ const EVE = () => {
   };
 
   const startListening = () => {
+    console.log('🎤 Starting listening...');
     setError('');
     setInsights(null);
     setTranscript('');
     setSessionActive(true);
     setSessionDuration(0);
     startTimeRef.current = Date.now();
+    console.log('⏰ Timer starting...');
     
     // Start timer
     timerRef.current = setInterval(() => {
       if (startTimeRef.current) {
-        setSessionDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
+        const newDuration = Math.floor((Date.now() - startTimeRef.current) / 1000);
+        console.log('⏱️ Timer tick:', newDuration);
+        setSessionDuration(newDuration);
       }
     }, 1000);
     
     try {
       if (recognitionRef.current) {
+        console.log('🎙️ Starting speech recognition...');
         recognitionRef.current.start();
         setIsListening(true);
+        console.log('✅ Speech recognition started successfully');
+      } else {
+        console.error('❌ Recognition ref is null');
+        setError('Spraakherkenning niet beschikbaar');
       }
     } catch (error) {
-      console.error('Error starting recognition:', error);
-      setError('Spraakherkenning starten mislukt. Probeer opnieuw.');
+      console.error('❌ Error starting recognition:', error);
+      setError('Spraakherkenning starten mislukt: ' + error.message);
       clearInterval(timerRef.current);
     }
   };
@@ -363,6 +413,19 @@ const EVE = () => {
             Nederlandse spraakherkenning • 100% lokaal • Geen kosten
           </p>
         </div>
+
+        {/* Debug Info */}
+        {sessionActive && (
+          <div className="mb-4 text-center">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 inline-block">
+              <p className="text-yellow-800 text-sm">
+                Debug: Timer {sessionDuration}s | Listening: {isListening ? '✅' : '❌'} | 
+                Permission: {permissionStatus} | 
+                Transcript: {transcript.length} chars
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Session Info */}
         {sessionActive && (
